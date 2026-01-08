@@ -16,12 +16,12 @@ X-ISO Disc Image Converter and Burner
 
 ## Features Working:
 
-✅ Convert tab with file browser
-✅ Progress bar with real-time updates
-✅ Burn disc interface
-✅ Virtual drive mounting
-✅ All Tools menu items
-✅ Complete conversion workflow: Tools > Convert > Browse > Save As > Convert > Success message
+* Convert tab with file browser
+* Progress bar with real-time updates
+* Burn disc interface
+* Virtual drive mounting
+* All Tools menu items
+* Complete conversion workflow: Tools > Convert > Browse > Save As > Convert > Success message
 
 ## Dependencies
 
