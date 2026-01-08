@@ -1,6 +1,6 @@
 # X-ISO
 X-ISO Disc Image Converter and Burner
-## Written in python and using Tkinter for the GUI, 
+## Written in python and using Tkinter for the GUI
 
 ## Prerequisites
 * import tkinter as tk
