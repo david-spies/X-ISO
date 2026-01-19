@@ -1,0 +1,28 @@
+musicbrainzngs
+cdparanoia
+CDDB-py
+python-discid
+
+### Working with Linux Mint - 
+
+If unable to install from the built-in software manager:
+
+apt install python3-cdparanoia
+
+apt install python3-ffmpeg
+
+pip3 install python-discid
+pip3 install musicbrainzngs
+
+The "CDDB module not installed" error means
+your media software (like music players or ripping tools) can't find the necessary components to fetch album/track info from online databases, often fixed by installing specific packages (kde-config-cddb for Linux), ensuring proper setup in the app (VLC, K3b), or updating drivers/connections if it's a car system. The solution depends heavily on the software and OS, but generally involves installing missing libraries or checking settings. 
+
+### For Linux Users (KDE/K3b)
+
+Install the package: Open your terminal and run sudo apt install kde-config-cddb (for Ubuntu/Debian) or your distribution's equivalent to get the KCDDB module. 
+
+sudo apt install kde-config-cddb
+
+sudo apt install python3-musicbrainzngs
+
+
