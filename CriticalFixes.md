@@ -1,4 +1,4 @@
-## Critical fixes:
+### Critical fixes:
 🎵 Real Audio CD Ripping - Now Working on Linux!
 Major Changes:
 
@@ -40,12 +40,12 @@ Prints detailed console output for troubleshooting
 Shows cdparanoia and ffmpeg output
 
 #### Why It Now Works:
-✅ Proper device mapping: Uses /dev/sr0 instead of Windows drive letters
-✅ Correct cdparanoia syntax: -d /dev/sr0 [track#] output.wav
-✅ Two-stage process: Extract to WAV first, then convert
-✅ High quality encoding: 320kbps MP3, level 8 FLAC
-✅ Real file creation: Actual audio data, not text placeholders
-✅ Track success tracking: Reports which tracks worked
+* ✅ Proper device mapping: Uses /dev/sr0 instead of Windows drive letters
+* ✅ Correct cdparanoia syntax: -d /dev/sr0 [track#] output.wav
+* ✅ Two-stage process: Extract to WAV first, then convert
+* ✅ High quality encoding: 320kbps MP3, level 8 FLAC
+* ✅ Real file creation: Actual audio data, not text placeholders
+* ✅ Track success tracking: Reports which tracks worked
 The files created are now real, playable audio files extracted from your CD.
 
 
