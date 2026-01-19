@@ -2,7 +2,7 @@
 🎵 Real Audio CD Ripping - Now Working on Linux!
 Major Changes:
 
-# Linux CD Detection - Now properly detects CDs using:
+### Linux CD Detection - Now properly detects CDs using:
 
 cdparanoia -Q to query actual CD tracks
 Parses real track information (number, duration)
@@ -23,10 +23,10 @@ FLAC: -codec:a flac -compression_level 8 (maximum compression)
 AAC: -codec:a aac -b:a 256k (256 kbps quality)
 
 
-# Cleans up temporary WAV files after conversion
+### Cleans up temporary WAV files after conversion
 
 
-# Error Handling:
+### Error Handling:
 
 Tracks successful vs failed rips
 Shows which tracks failed
@@ -34,12 +34,12 @@ Provides helpful error messages
 5-minute timeout per track for safety
 
 
-# Debug Output:
+### Debug Output:
 
 Prints detailed console output for troubleshooting
 Shows cdparanoia and ffmpeg output
 
-# Why It Now Works:
+#### Why It Now Works:
 ✅ Proper device mapping: Uses /dev/sr0 instead of Windows drive letters
 ✅ Correct cdparanoia syntax: -d /dev/sr0 [track#] output.wav
 ✅ Two-stage process: Extract to WAV first, then convert
