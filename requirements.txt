@@ -1,0 +1,127 @@
+# X-ISO - Disc Image Converter & Burner
+# Requirements and Dependencies
+# Python 3.6+
+
+# ============================================================================
+# CORE DEPENDENCIES
+# ============================================================================
+# Python Standard Library (no installation needed):
+# - tkinter (GUI framework - usually included with Python)
+# - subprocess (system command execution)
+# - threading (multi-threaded operations)
+# - os (operating system interface)
+# - socket (network operations)
+# - struct (binary data handling)
+# - pathlib (filesystem paths)
+# - urllib (HTTP requests for metadata)
+
+# ============================================================================
+# SYSTEM DEPENDENCIES (Install separately)
+# ============================================================================
+# REQUIRED for audio CD ripping and format conversion:
+# 
+# Linux Installation:
+#   Ubuntu/Debian/Linux Mint:
+#     sudo apt-get install ffmpeg cdparanoia
+#   
+#   Fedora/RHEL:
+#     sudo dnf install ffmpeg cdparanoia
+#   
+#   Arch Linux:
+#     sudo pacman -S ffmpeg cdparanoia
+#
+# Windows Installation:
+#   1. Download FFmpeg from https://ffmpeg.org/download.html
+#   2. Extract and add to system PATH
+#   3. Verify: ffmpeg -version
+#
+# macOS Installation:
+#   brew install ffmpeg cdparanoia
+
+# ============================================================================
+# OPTIONAL PYTHON PACKAGES
+# ============================================================================
+# Uncomment below for enhanced CD metadata lookup features
+# (Application will work without these, but won't fetch metadata automatically)
+
+# For MusicBrainz disc ID and metadata lookup (Python 3 compatible)
+# musicbrainzngs>=0.7.4
+
+# For disc ID calculation from CD
+# python-discid>=1.2.0
+
+# ============================================================================
+# INSTALLATION INSTRUCTIONS
+# ============================================================================
+#
+# Basic Installation (CLI):
+#   pip install -r requirements.txt
+#
+# With optional dependencies:
+#   1. Uncomment optional packages above
+#   2. Run: pip install -r requirements.txt
+#
+# Upgrade pip (recommended):
+#   pip install --upgrade pip
+#
+# Virtual Environment (recommended):
+#   python3 -m venv venv
+#   source venv/bin/activate  # Linux/macOS
+#   venv\Scripts\activate     # Windows
+#   pip install -r requirements.txt
+
+# ============================================================================
+# VERIFY INSTALLATION
+# ============================================================================
+#
+# Check Python version:
+#   python3 --version  (requires 3.6+)
+#
+# Check tkinter:
+#   python3 -m tkinter  (window should appear)
+#
+# Check ffmpeg:
+#   ffmpeg -version
+#
+# Check cdparanoia (Linux only):
+#   cdparanoia -V
+#
+# Run application:
+#   python3 X-ISO.py
+
+# ============================================================================
+# TROUBLESHOOTING
+# ============================================================================
+#
+# If tkinter is missing on Linux:
+#   Ubuntu/Debian: sudo apt-get install python3-tk
+#   Fedora: sudo dnf install python3-tkinter
+#   Arch: sudo pacman -S tk
+#
+# If ffmpeg is missing:
+#   See SYSTEM DEPENDENCIES section above
+#
+# For CD audio extraction:
+#   Ensure cdparanoia is installed and in PATH
+#   Linux: sudo apt-get install cdparanoia
+#
+# For metadata lookup:
+#   Optional packages enable automatic album/artist/title retrieval
+#   Without them, app still works but uses generic track names
+#
+# Permission issues with CD drive:
+#   Linux: sudo usermod -a -G cdrom $USER
+#   Then logout and login again
+
+# ============================================================================
+# SUPPORTED PYTHON VERSIONS
+# ============================================================================
+# - Python 3.6 (minimum)
+# - Python 3.7 (recommended minimum)
+# - Python 3.8 (recommended)
+# - Python 3.9+
+# - Python 3.14+ (tested and compatible)
+#
+# NOT supported:
+# - Python 2.x (deprecated)
+# - Python 3.0-3.5 (too old)
