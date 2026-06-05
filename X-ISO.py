@@ -45,7 +45,7 @@ class XISOMApp:
     def __init__(self, root):
         self.root = root
         self.root.title("X-ISO - Disc Image Converter & Burner")
-        self.root.geometry("900x800")
+        self.root.geometry("900x770")
         
         self.converter = ImageConverter(progress_callback=self.update_progress)
         self.conversion_thread = None
@@ -340,7 +340,7 @@ class XISOMApp:
     def open_append_window(self):
         win = tk.Toplevel(self.root)
         win.title("Append Data to Disc")
-        win.geometry("550x580")
+        win.geometry("550x560")
         
         tk.Label(win, text="Append Data to Disc", font=("Arial", 16, "bold")).pack(pady=20)
         
@@ -360,7 +360,7 @@ class XISOMApp:
     def open_erase_window(self):
         win = tk.Toplevel(self.root)
         win.title("Erase Rewritable Disc")
-        win.geometry("500x400")
+        win.geometry("500x380")
         
         tk.Label(win, text="Erase Rewritable Disc", font=("Arial", 16, "bold")).pack(pady=20)
         
@@ -380,7 +380,7 @@ class XISOMApp:
     def open_drive_info_window(self):
         win = tk.Toplevel(self.root)
         win.title("Drive/Disc Information")
-        win.geometry("550x580")
+        win.geometry("550x570")
         
         tk.Label(win, text="Drive/Disc Information", font=("Arial", 16, "bold")).pack(pady=20)
         
@@ -473,7 +473,7 @@ Sessions: 0"""
     def open_rip_audio_window(self):
         win = tk.Toplevel(self.root)
         win.title("Rip Audio CD")
-        win.geometry("650x780")
+        win.geometry("650x720")
         
         tk.Label(win, text="Rip Audio CD", font=("Arial", 16, "bold")).pack(pady=20)
         
@@ -530,6 +530,36 @@ Sessions: 0"""
         tk.Button(win, text="Start Ripping", bg="#0078d4", fg="white", padx=20, pady=10,
                  command=lambda: self._start_ripping(track_list_frame, folder_entry.get(), format_var.get())).pack(pady=15)
     
+    def _calculate_cddb_disc_id(self, track_list):
+        """Calculate CDDB disc ID from track offsets"""
+        import struct
+        
+        if not track_list:
+            return None, None, None
+        
+        # Calculate offsets in seconds
+        offsets = []
+        for track in track_list:
+            offset_seconds = track['start_frame'] // 75
+            offsets.append(offset_seconds)
+        
+        # Calculate total disc length
+        last_track = track_list[-1]
+        total_frames = last_track['start_frame'] + last_track['length_frames']
+        total_seconds = total_frames // 75
+        
+        # Calculate CDDB disc ID checksum
+        n = 0
+        for offset in offsets:
+            n += sum(int(d) for d in str(offset))
+        
+        t = total_seconds - (offsets[0])
+        disc_id = ((n % 0xff) << 24 | t << 8 | len(track_list))
+        
+        disc_id_hex = format(disc_id, '08x')
+        
+        return disc_id_hex, offsets, total_seconds
+    
     def _read_audio_cd(self, drive, track_frame):
         """Read audio CD and populate track list"""
         # Clear existing widgets
@@ -537,7 +567,7 @@ Sessions: 0"""
             widget.destroy()
         
         # Show loading message
-        loading_label = tk.Label(track_frame, text="Reading CD...", fg="blue", font=("Arial", 10))
+        loading_label = tk.Label(track_frame, text="Reading CD and fetching metadata...", fg="blue", font=("Arial", 10))
         loading_label.pack(pady=20)
         track_frame.update()
         
@@ -548,13 +578,15 @@ Sessions: 0"""
         tracks_found = False
         track_info = []
         cd_device = None
+        disc_info = {'artist': 'Unknown Artist', 'album': 'Unknown Album', 'year': ''}
         
         try:
             if platform.system() == "Linux":
                 # On Linux, use cdparanoia or cdda2wav to query CD
                 cd_device = f"/dev/sr0" if drive == "D:" else f"/dev/sr{ord(drive[0]) - ord('D')}"
                 
-                # Try cdparanoia first
+                # First, get track list and durations from cdparanoia
+                track_list = []
                 try:
                     result = subprocess.run(
                         ['cdparanoia', '-d', cd_device, '-Q'],
@@ -564,60 +596,200 @@ Sessions: 0"""
                     )
                     
                     if result.returncode == 0 or result.stderr:
-                        # Parse cdparanoia output
-                        output = result.stderr  # cdparanoia outputs to stderr
+                        output = result.stderr
                         for line in output.split('\n'):
                             line = line.strip()
-                            # Look for track info lines like "  1.     0 [00:00.00]    16575 [03:41.00]"
-                            if line and line[0].isdigit() and '.' in line:
+                            if line and len(line) > 0 and line[0].isdigit() and '.' in line:
                                 parts = line.split()
                                 if len(parts) >= 4:
                                     try:
                                         track_num = int(parts[0].rstrip('.'))
-                                        # Extract duration from format [MM:SS.FF]
                                         duration_str = parts[3].strip('[]')
                                         if ':' in duration_str:
-                                            duration = duration_str.split('.')[0]  # Get MM:SS part
-                                            track_info.append({
+                                            duration = duration_str.split('.')[0]
+                                            start_frame = int(parts[1])
+                                            length_frames = int(parts[2])
+                                            track_list.append({
                                                 'number': track_num,
-                                                'title': f'Track {track_num:02d}',
                                                 'duration': duration,
-                                                'device': cd_device
+                                                'start_frame': start_frame,
+                                                'length_frames': length_frames
                                             })
                                             tracks_found = True
-                                    except:
+                                    except ValueError:
                                         continue
                 except Exception as e:
                     print(f"cdparanoia query failed: {e}")
                 
-                # Try cd-info or cdda2wav as fallback
-                if not tracks_found:
+                # Calculate CDDB disc ID
+                cddb_disc_id = None
+                offsets = []
+                total_seconds = 0
+                
+                if track_list:
+                    cddb_disc_id, offsets, total_seconds = self._calculate_cddb_disc_id(track_list)
+                    print(f"Calculated CDDB Disc ID: {cddb_disc_id}")
+                    print(f"Track offsets: {offsets}")
+                    print(f"Total seconds: {total_seconds}")
+                
+                # Try GnuDB lookup (replacement for FreeDB)
+                if cddb_disc_id and offsets:
                     try:
-                        result = subprocess.run(
-                            ['cd-info', '--no-header', cd_device],
-                            capture_output=True,
-                            text=True,
-                            timeout=5
+                        import urllib.request
+                        import urllib.parse
+                        import socket
+                        
+                        # Set timeout for socket operations
+                        socket.setdefaulttimeout(10)
+                        
+                        num_tracks = len(track_list)
+                        offset_str = ' '.join(str(o) for o in offsets)
+                        
+                        # Build CDDB query string
+                        query_str = f"{cddb_disc_id} {num_tracks} {offset_str} {total_seconds}"
+                        
+                        # Try GnuDB (modern FreeDB replacement)
+                        print(f"Querying GnuDB with: {query_str}")
+                        
+                        # Prepare the query
+                        hello = "user+hostname+X-ISO+1.0"
+                        proto = "6"
+                        
+                        # Use the correct GnuDB server
+                        base_url = "http://gnudb.gnudb.org/~cddb/cddb.cgi"
+                        
+                        # Query for matches
+                        query_url = f"{base_url}?cmd=cddb+query+{query_str.replace(' ', '+')}&hello={hello}&proto={proto}"
+                        
+                        print(f"Query URL: {query_url}")
+                        
+                        request = urllib.request.Request(
+                            query_url,
+                            headers={
+                                'User-Agent': 'X-ISO/1.0',
+                                'Connection': 'close'
+                            }
                         )
-                        if result.returncode == 0:
-                            # Parse cd-info output for track count
-                            for line in result.stdout.split('\n'):
-                                if 'audio tracks' in line.lower() or 'track' in line.lower():
-                                    import re
-                                    match = re.search(r'(\d+)', line)
-                                    if match:
-                                        num_tracks = int(match.group(1))
-                                        for i in range(1, num_tracks + 1):
-                                            track_info.append({
-                                                'number': i,
-                                                'title': f'Track {i:02d}',
-                                                'duration': '3:30',
-                                                'device': cd_device
-                                            })
-                                        tracks_found = True
-                                        break
-                    except:
-                        pass
+                        
+                        with urllib.request.urlopen(request, timeout=15) as response:
+                            data = response.read().decode('utf-8', errors='ignore')
+                            print(f"GnuDB Response: {data[:200]}")
+                            
+                            lines = data.strip().split('\n')
+                            
+                            if lines:
+                                status_line = lines[0]
+                                print(f"Status: {status_line}")
+                                
+                                category = None
+                                match_disc_id = None
+                                
+                                # Handle different response codes
+                                if status_line.startswith('200'):
+                                    # Exact match
+                                    parts = status_line.split()
+                                    if len(parts) >= 3:
+                                        category = parts[1]
+                                        match_disc_id = parts[2]
+                                        print(f"Exact match: {category}/{match_disc_id}")
+                                
+                                elif status_line.startswith('211') or status_line.startswith('210'):
+                                    # Multiple or close matches - use first
+                                    if len(lines) > 1:
+                                        # First match is on second line
+                                        match_line = lines[1].strip()
+                                        parts = match_line.split()
+                                        if len(parts) >= 2:
+                                            category = parts[0]
+                                            match_disc_id = parts[1]
+                                            print(f"Multiple matches, using: {category}/{match_disc_id}")
+                                
+                                # If we found a match, read the full entry
+                                if category and match_disc_id:
+                                    read_url = f"{base_url}?cmd=cddb+read+{category}+{match_disc_id}&hello={hello}&proto={proto}"
+                                    print(f"Reading entry: {read_url}")
+                                    
+                                    read_request = urllib.request.Request(
+                                        read_url,
+                                        headers={
+                                            'User-Agent': 'X-ISO/1.0',
+                                            'Connection': 'close'
+                                        }
+                                    )
+                                    
+                                    with urllib.request.urlopen(read_request, timeout=15) as read_response:
+                                        read_data = read_response.read().decode('utf-8', errors='ignore')
+                                        
+                                        # Parse CDDB data
+                                        track_titles = {}
+                                        dtitle_parts = []
+                                        
+                                        for line in read_data.split('\n'):
+                                            line = line.strip()
+                                            
+                                            if line.startswith('DTITLE='):
+                                                dtitle_part = line.split('=', 1)[1]
+                                                dtitle_parts.append(dtitle_part)
+                                            
+                                            elif line.startswith('DYEAR='):
+                                                year = line.split('=', 1)[1].strip()
+                                                if year:
+                                                    disc_info['year'] = year
+                                            
+                                            elif line.startswith('TTITLE'):
+                                                # Extract track number and title
+                                                try:
+                                                    eq_pos = line.index('=')
+                                                    key = line[:eq_pos]
+                                                    value = line[eq_pos+1:]
+                                                    
+                                                    track_num_str = key.replace('TTITLE', '')
+                                                    track_num = int(track_num_str) + 1
+                                                    
+                                                    if track_num in track_titles:
+                                                        track_titles[track_num] += value
+                                                    else:
+                                                        track_titles[track_num] = value
+                                                except:
+                                                    pass
+                                        
+                                        # Process DTITLE (may be multi-line)
+                                        dtitle = ''.join(dtitle_parts).strip()
+                                        if dtitle:
+                                            if ' / ' in dtitle:
+                                                parts = dtitle.split(' / ', 1)
+                                                disc_info['artist'] = parts[0].strip()
+                                                disc_info['album'] = parts[1].strip()
+                                            else:
+                                                disc_info['album'] = dtitle
+                                        
+                                        # Apply track titles
+                                        for track in track_list:
+                                            title = track_titles.get(track['number'], f"Track {track['number']:02d}")
+                                            track['title'] = title.strip()
+                                        
+                                        print(f"GnuDB Success: '{disc_info['album']}' by {disc_info['artist']}")
+                                        print(f"Found {len(track_titles)} track titles")
+                                
+                                elif status_line.startswith('202'):
+                                    print("No match found in GnuDB database")
+                                else:
+                                    print(f"GnuDB lookup returned: {status_line}")
+                    
+                    except Exception as e:
+                        print(f"GnuDB lookup failed: {e}")
+                        import traceback
+                        traceback.print_exc()
+                
+                # Apply metadata to track info
+                for track in track_list:
+                    if 'title' not in track:
+                        track['title'] = f"Track {track['number']:02d}"
+                    track['device'] = cd_device
+                    track['artist'] = disc_info['artist']
+                    track['album'] = disc_info['album']
+                    track['year'] = disc_info['year']
+                    track_info.append(track)
                 
             elif platform.system() == "Windows":
                 # Windows CD detection code
@@ -637,15 +809,18 @@ Sessions: 0"""
                                         'number': i,
                                         'title': f'Track {i:02d}',
                                         'duration': f'{minutes}:{seconds:02d}',
-                                        'device': drive
+                                        'device': drive,
+                                        'artist': 'Unknown Artist',
+                                        'album': 'Unknown Album',
+                                        'year': ''
                                     })
                         except:
                             pass
                 except:
                     pass
             
-            # If still no tracks found, generate sample data for demonstration
-            if not tracks_found:
+            # If still no tracks found, generate sample data
+            if not tracks_found and not track_list:
                 sample_tracks = 12
                 cd_device = cd_device or (f"/dev/sr0" if platform.system() == "Linux" else "D:")
                 for i in range(1, sample_tracks + 1):
@@ -655,20 +830,31 @@ Sessions: 0"""
                         'number': i,
                         'title': f'Track {i:02d}',
                         'duration': f'{minutes}:{seconds:02d}',
-                        'device': cd_device
+                        'device': cd_device,
+                        'artist': 'Unknown Artist',
+                        'album': 'Unknown Album',
+                        'year': ''
                     })
                 tracks_found = True
                 
         except Exception as e:
             print(f"Error reading CD: {e}")
+            import traceback
+            traceback.print_exc()
         
         # Clear loading message
         loading_label.destroy()
         
-        if tracks_found:
-            # Display track list with checkboxes
-            tk.Label(track_frame, text=f"Audio CD - {len(track_info)} tracks found", 
-                    font=("Arial", 10, "bold"), fg="green").pack(pady=5)
+        if track_info or tracks_found:
+            # Display disc info
+            info_frame = tk.Frame(track_frame, bg="#e8f4f8", relief=tk.RAISED, bd=2)
+            info_frame.pack(fill=tk.X, pady=10, padx=5)
+            
+            tk.Label(info_frame, text=f"Album: {disc_info['album']}", font=("Arial", 11, "bold"), bg="#e8f4f8").pack(anchor=tk.W, padx=10, pady=2)
+            tk.Label(info_frame, text=f"Artist: {disc_info['artist']}", font=("Arial", 10), bg="#e8f4f8").pack(anchor=tk.W, padx=10, pady=2)
+            if disc_info['year']:
+                tk.Label(info_frame, text=f"Year: {disc_info['year']}", font=("Arial", 9), bg="#e8f4f8").pack(anchor=tk.W, padx=10, pady=2)
+            tk.Label(info_frame, text=f"{len(track_info)} tracks", font=("Arial", 9), fg="green", bg="#e8f4f8").pack(anchor=tk.W, padx=10, pady=2)
             
             # Select/Deselect all
             select_frame = tk.Frame(track_frame)
@@ -695,16 +881,654 @@ Sessions: 0"""
                 var = tk.BooleanVar(value=True)
                 all_vars.append(var)
                 
-                cb = tk.Checkbutton(track_item_frame, text=f"{track['title']}", variable=var, width=15, anchor='w')
+                cb = tk.Checkbutton(track_item_frame, text=f"{track['number']:02d}. {track['title']}", 
+                                   variable=var, width=40, anchor='w')
                 cb.pack(side=tk.LEFT)
                 
-                tk.Label(track_item_frame, text=f"Duration: {track['duration']}", width=15).pack(side=tk.LEFT, padx=10)
-                tk.Label(track_item_frame, text="Audio Track", fg="gray").pack(side=tk.LEFT)
+                tk.Label(track_item_frame, text=f"{track['duration']}", width=8).pack(side=tk.LEFT, padx=10)
             
             # Store track vars for ripping
             track_frame.track_vars = all_vars
             track_frame.track_info = track_info
             track_frame.cd_device = cd_device
+            track_frame.disc_info = disc_info
+        else:
+            tk.Label(track_frame, text="No audio CD detected in drive", 
+                    fg="red", font=("Arial", 10)).pack(pady=20)
+            tk.Label(track_frame, text="Please insert an audio CD and try again", 
+                    fg="gray").pack()
+            tk.Label(track_frame, text="\nNote: Metadata lookup uses GnuDB (no packages required)", 
+                    fg="gray", font=("Arial", 8)).pack()
+    
+        """Read audio CD and populate track list"""
+        # Clear existing widgets
+        for widget in track_frame.winfo_children():
+            widget.destroy()
+        
+        # Show loading message
+        loading_label = tk.Label(track_frame, text="Reading CD and fetching metadata...", fg="blue", font=("Arial", 10))
+        loading_label.pack(pady=20)
+        track_frame.update()
+        
+        # Try to detect CD
+        import platform
+        import subprocess
+        
+        tracks_found = False
+        track_info = []
+        cd_device = None
+        disc_info = {'artist': 'Unknown Artist', 'album': 'Unknown Album', 'year': ''}
+        
+        try:
+            if platform.system() == "Linux":
+                # On Linux, use cdparanoia or cdda2wav to query CD
+                cd_device = f"/dev/sr0" if drive == "D:" else f"/dev/sr{ord(drive[0]) - ord('D')}"
+                
+                # First, get track list and durations from cdparanoia
+                track_list = []
+                try:
+                    result = subprocess.run(
+                        ['cdparanoia', '-d', cd_device, '-Q'],
+                        capture_output=True,
+                        text=True,
+                        timeout=5
+                    )
+                    
+                    if result.returncode == 0 or result.stderr:
+                        output = result.stderr
+                        for line in output.split('\n'):
+                            line = line.strip()
+                            if line and line[0].isdigit() and '.' in line:
+                                parts = line.split()
+                                if len(parts) >= 4:
+                                    try:
+                                        track_num = int(parts[0].rstrip('.'))
+                                        duration_str = parts[3].strip('[]')
+                                        if ':' in duration_str:
+                                            duration = duration_str.split('.')[0]
+                                            # Get length in seconds for discid calculation
+                                            start_frame = int(parts[1])
+                                            length_frames = int(parts[2])
+                                            track_list.append({
+                                                'number': track_num,
+                                                'duration': duration,
+                                                'start_frame': start_frame,
+                                                'length_frames': length_frames
+                                            })
+                                            tracks_found = True
+                                    except:
+                                        continue
+                except Exception as e:
+                    print(f"cdparanoia query failed: {e}")
+                
+                # Get disc ID using libdiscid (Python 3 compatible)
+                disc_id = None
+                mb_disc_id = None
+                freedb_disc_id = None
+                
+                try:
+                    import discid
+                    disc = discid.read(cd_device)
+                    mb_disc_id = disc.id
+                    freedb_disc_id = disc.freedb_id
+                    print(f"MusicBrainz Disc ID: {mb_disc_id}")
+                    print(f"FreeDB Disc ID: {freedb_disc_id}")
+                except ImportError:
+                    print("python-discid not installed - trying cd-discid command")
+                    try:
+                        result = subprocess.run(['cd-discid', cd_device], capture_output=True, text=True, timeout=5)
+                        if result.returncode == 0:
+                            parts = result.stdout.strip().split()
+                            if len(parts) >= 2:
+                                freedb_disc_id = parts[0]
+                                print(f"FreeDB Disc ID (cd-discid): {freedb_disc_id}")
+                    except:
+                        print("cd-discid command not available")
+                except Exception as e:
+                    print(f"discid reading failed: {e}")
+                
+                # Try MusicBrainz lookup with proper parameters
+                if mb_disc_id:
+                    try:
+                        import musicbrainzngs
+                        musicbrainzngs.set_useragent("X-ISO", "1.0", "https://github.com/x-iso/x-iso")
+                        
+                        print(f"Querying MusicBrainz for disc ID: {mb_disc_id}")
+                        result = musicbrainzngs.get_releases_by_discid(
+                            mb_disc_id,
+                            includes=['artists', 'recordings', 'artist-credits']
+                        )
+                        
+                        if result and 'disc' in result and 'release-list' in result['disc']:
+                            releases = result['disc']['release-list']
+                            if releases:
+                                release = releases[0]
+                                disc_info['album'] = release.get('title', 'Unknown Album')
+                                
+                                if 'artist-credit' in release and release['artist-credit']:
+                                    disc_info['artist'] = release['artist-credit'][0]['artist']['name']
+                                
+                                if 'date' in release:
+                                    disc_info['year'] = release['date'][:4]
+                                
+                                # Get track names
+                                if 'medium-list' in release:
+                                    for medium in release['medium-list']:
+                                        if 'track-list' in medium:
+                                            track_names = {}
+                                            for track in medium['track-list']:
+                                                position = int(track.get('position', 0))
+                                                if 'recording' in track:
+                                                    title = track['recording'].get('title', f'Track {position:02d}')
+                                                    track_names[position] = title
+                                            
+                                            # Apply track names to our track list
+                                            for track in track_list:
+                                                track['title'] = track_names.get(track['number'], f"Track {track['number']:02d}")
+                                
+                                print(f"MusicBrainz: Found '{disc_info['album']}' by {disc_info['artist']}")
+                    except ImportError:
+                        print("musicbrainzngs not installed - install with: pip3 install musicbrainzngs")
+                    except Exception as e:
+                        print(f"MusicBrainz lookup failed: {e}")
+                
+                # Try CDDB via GnuDB (Python 3 compatible replacement)
+                if disc_info['artist'] == 'Unknown Artist' and freedb_disc_id:
+                    try:
+                        import urllib.request
+                        import urllib.parse
+                        
+                        # Calculate CDDB query from track offsets
+                        if track_list:
+                            # GnuDB API endpoint (freedb.org replacement)
+                            offsets = ' '.join([str(t['start_frame']) for t in track_list])
+                            total_length = track_list[-1]['start_frame'] + track_list[-1]['length_frames']
+                            total_seconds = total_length // 75  # CD frames are 75 per second
+                            
+                            query = f"cddb query {freedb_disc_id} {len(track_list)} {offsets} {total_seconds}"
+                            
+                            # Try gnudb.gnudb.org (MusicBrainz CDDB gateway)
+                            url = f"http://gnudb.gnudb.org/~cddb/cddb.cgi?cmd={urllib.parse.quote(query)}&hello=user+localhost+X-ISO+1.0&proto=6"
+                            
+                            print(f"Querying CDDB/GnuDB: {freedb_disc_id}")
+                            
+                            with urllib.request.urlopen(url, timeout=10) as response:
+                                data = response.read().decode('utf-8')
+                                lines = data.split('\n')
+                                
+                                if lines and lines[0].startswith('200'):
+                                    # Exact match
+                                    parts = lines[0].split()
+                                    if len(parts) >= 4:
+                                        category = parts[1]
+                                        disc_id_match = parts[2]
+                                        
+                                        # Now read the full entry
+                                        read_url = f"http://gnudb.gnudb.org/~cddb/cddb.cgi?cmd=cddb+read+{category}+{disc_id_match}&hello=user+localhost+X-ISO+1.0&proto=6"
+                                        
+                                        with urllib.request.urlopen(read_url, timeout=10) as read_response:
+                                            read_data = read_response.read().decode('utf-8', errors='ignore')
+                                            
+                                            # Parse CDDB response
+                                            track_titles = {}
+                                            for line in read_data.split('\n'):
+                                                if line.startswith('DTITLE='):
+                                                    dtitle = line.split('=', 1)[1].strip()
+                                                    if ' / ' in dtitle:
+                                                        artist, album = dtitle.split(' / ', 1)
+                                                        disc_info['artist'] = artist.strip()
+                                                        disc_info['album'] = album.strip()
+                                                    else:
+                                                        disc_info['album'] = dtitle.strip()
+                                                elif line.startswith('DYEAR='):
+                                                    disc_info['year'] = line.split('=', 1)[1].strip()
+                                                elif line.startswith('TTITLE'):
+                                                    match = line.split('=', 1)
+                                                    if len(match) == 2:
+                                                        track_num_str = match[0].replace('TTITLE', '')
+                                                        track_num = int(track_num_str) + 1
+                                                        track_titles[track_num] = match[1].strip()
+                                            
+                                            # Apply track titles
+                                            for track in track_list:
+                                                track['title'] = track_titles.get(track['number'], f"Track {track['number']:02d}")
+                                            
+                                            print(f"CDDB: Found '{disc_info['album']}' by {disc_info['artist']}")
+                                
+                                elif lines and lines[0].startswith('211'):
+                                    # Multiple matches - use first one
+                                    if len(lines) > 1:
+                                        parts = lines[1].split()
+                                        if len(parts) >= 2:
+                                            category = parts[0]
+                                            disc_id_match = parts[1]
+                                            
+                                            read_url = f"http://gnudb.gnudb.org/~cddb/cddb.cgi?cmd=cddb+read+{category}+{disc_id_match}&hello=user+localhost+X-ISO+1.0&proto=6"
+                                            
+                                            with urllib.request.urlopen(read_url, timeout=10) as read_response:
+                                                read_data = read_response.read().decode('utf-8', errors='ignore')
+                                                
+                                                track_titles = {}
+                                                for line in read_data.split('\n'):
+                                                    if line.startswith('DTITLE='):
+                                                        dtitle = line.split('=', 1)[1].strip()
+                                                        if ' / ' in dtitle:
+                                                            artist, album = dtitle.split(' / ', 1)
+                                                            disc_info['artist'] = artist.strip()
+                                                            disc_info['album'] = album.strip()
+                                                    elif line.startswith('TTITLE'):
+                                                        match = line.split('=', 1)
+                                                        if len(match) == 2:
+                                                            track_num_str = match[0].replace('TTITLE', '')
+                                                            track_num = int(track_num_str) + 1
+                                                            track_titles[track_num] = match[1].strip()
+                                                
+                                                for track in track_list:
+                                                    track['title'] = track_titles.get(track['number'], f"Track {track['number']:02d}")
+                                                
+                                                print(f"CDDB: Found '{disc_info['album']}' by {disc_info['artist']}")
+                    except Exception as e:
+                        print(f"CDDB lookup failed: {e}")
+                
+                # Apply metadata to track info
+                for track in track_list:
+                    if 'title' not in track:
+                        track['title'] = f"Track {track['number']:02d}"
+                    track['device'] = cd_device
+                    track['artist'] = disc_info['artist']
+                    track['album'] = disc_info['album']
+                    track['year'] = disc_info['year']
+                    track_info.append(track)
+                
+            elif platform.system() == "Windows":
+                # Windows CD detection code
+                try:
+                    drive_path = f"{drive}\\"
+                    if os.path.exists(drive_path):
+                        try:
+                            files = os.listdir(drive_path)
+                            cda_files = [f for f in files if f.lower().endswith('.cda')]
+                            if cda_files:
+                                tracks_found = True
+                                cd_device = drive
+                                for i, cda_file in enumerate(sorted(cda_files), 1):
+                                    minutes = 3 + (i % 4)
+                                    seconds = (i * 17) % 60
+                                    track_info.append({
+                                        'number': i,
+                                        'title': f'Track {i:02d}',
+                                        'duration': f'{minutes}:{seconds:02d}',
+                                        'device': drive,
+                                        'artist': 'Unknown Artist',
+                                        'album': 'Unknown Album',
+                                        'year': ''
+                                    })
+                        except:
+                            pass
+                except:
+                    pass
+            
+            # If still no tracks found, generate sample data
+            if not tracks_found and not track_list:
+                sample_tracks = 12
+                cd_device = cd_device or (f"/dev/sr0" if platform.system() == "Linux" else "D:")
+                for i in range(1, sample_tracks + 1):
+                    minutes = 3 + (i % 4)
+                    seconds = (i * 17) % 60
+                    track_info.append({
+                        'number': i,
+                        'title': f'Track {i:02d}',
+                        'duration': f'{minutes}:{seconds:02d}',
+                        'device': cd_device,
+                        'artist': 'Unknown Artist',
+                        'album': 'Unknown Album',
+                        'year': ''
+                    })
+                tracks_found = True
+                
+        except Exception as e:
+            print(f"Error reading CD: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        # Clear loading message
+        loading_label.destroy()
+        
+        if track_info or tracks_found:
+            # Display disc info
+            info_frame = tk.Frame(track_frame, bg="#e8f4f8", relief=tk.RAISED, bd=2)
+            info_frame.pack(fill=tk.X, pady=10, padx=5)
+            
+            tk.Label(info_frame, text=f"Album: {disc_info['album']}", font=("Arial", 11, "bold"), bg="#e8f4f8").pack(anchor=tk.W, padx=10, pady=2)
+            tk.Label(info_frame, text=f"Artist: {disc_info['artist']}", font=("Arial", 10), bg="#e8f4f8").pack(anchor=tk.W, padx=10, pady=2)
+            if disc_info['year']:
+                tk.Label(info_frame, text=f"Year: {disc_info['year']}", font=("Arial", 9), bg="#e8f4f8").pack(anchor=tk.W, padx=10, pady=2)
+            tk.Label(info_frame, text=f"{len(track_info)} tracks", font=("Arial", 9), fg="green", bg="#e8f4f8").pack(anchor=tk.W, padx=10, pady=2)
+            
+            # Select/Deselect all
+            select_frame = tk.Frame(track_frame)
+            select_frame.pack(fill=tk.X, pady=5)
+            
+            all_vars = []
+            
+            def select_all():
+                for var in all_vars:
+                    var.set(True)
+            
+            def deselect_all():
+                for var in all_vars:
+                    var.set(False)
+            
+            tk.Button(select_frame, text="Select All", command=select_all).pack(side=tk.LEFT, padx=5)
+            tk.Button(select_frame, text="Deselect All", command=deselect_all).pack(side=tk.LEFT, padx=5)
+            
+            # Track list
+            for track in track_info:
+                track_item_frame = tk.Frame(track_frame)
+                track_item_frame.pack(fill=tk.X, pady=2, padx=5)
+                
+                var = tk.BooleanVar(value=True)
+                all_vars.append(var)
+                
+                cb = tk.Checkbutton(track_item_frame, text=f"{track['number']:02d}. {track['title']}", 
+                                   variable=var, width=40, anchor='w')
+                cb.pack(side=tk.LEFT)
+                
+                tk.Label(track_item_frame, text=f"{track['duration']}", width=8).pack(side=tk.LEFT, padx=10)
+            
+            # Store track vars for ripping
+            track_frame.track_vars = all_vars
+            track_frame.track_info = track_info
+            track_frame.cd_device = cd_device
+            track_frame.disc_info = disc_info
+        else:
+            tk.Label(track_frame, text="No audio CD detected in drive", 
+                    fg="red", font=("Arial", 10)).pack(pady=20)
+            tk.Label(track_frame, text="Please insert an audio CD and try again", 
+                    fg="gray").pack()
+            tk.Label(track_frame, text="\nFor metadata lookup, install:\npip3 install python-discid musicbrainzngs", 
+                    fg="gray", font=("Arial", 8)).pack()
+    
+        """Read audio CD and populate track list"""
+        # Clear existing widgets
+        for widget in track_frame.winfo_children():
+            widget.destroy()
+        
+        # Show loading message
+        loading_label = tk.Label(track_frame, text="Reading CD...", fg="blue", font=("Arial", 10))
+        loading_label.pack(pady=20)
+        track_frame.update()
+        
+        # Try to detect CD
+        import platform
+        import subprocess
+        
+        tracks_found = False
+        track_info = []
+        cd_device = None
+        disc_info = {'artist': 'Unknown Artist', 'album': 'Unknown Album', 'year': ''}
+        
+        try:
+            if platform.system() == "Linux":
+                # On Linux, use cdparanoia or cdda2wav to query CD
+                cd_device = f"/dev/sr0" if drive == "D:" else f"/dev/sr{ord(drive[0]) - ord('D')}"
+                
+                # Get disc ID and CDDB/MusicBrainz info
+                disc_id = None
+                try:
+                    # Try to get disc ID using cd-discid or libdiscid
+                    result = subprocess.run(['cd-discid', cd_device], capture_output=True, text=True, timeout=5)
+                    if result.returncode == 0:
+                        disc_id = result.stdout.strip()
+                        print(f"Disc ID: {disc_id}")
+                except:
+                    pass
+                
+                # Try MusicBrainz lookup using python-musicbrainzngs
+                try:
+                    import musicbrainzngs
+                    musicbrainzngs.set_useragent("X-ISO", "1.0", "https://github.com/x-iso")
+                    
+                    if disc_id:
+                        # Parse disc ID
+                        parts = disc_id.split()
+                        if len(parts) >= 3:
+                            discid_str = parts[0]
+                            num_tracks = int(parts[1])
+                            
+                            # Look up in MusicBrainz
+                            result = musicbrainzngs.get_releases_by_discid(discid_str, includes=['artists', 'recordings'])
+                            if result and 'disc' in result:
+                                release = result['disc']['release-list'][0]
+                                disc_info['album'] = release.get('title', 'Unknown Album')
+                                if 'artist-credit' in release:
+                                    disc_info['artist'] = release['artist-credit'][0]['artist']['name']
+                                disc_info['year'] = release.get('date', '')[:4]
+                                
+                                # Get track names
+                                if 'medium-list' in release:
+                                    for medium in release['medium-list']:
+                                        if 'disc-list' in medium:
+                                            track_list = medium.get('track-list', [])
+                                            for idx, track in enumerate(track_list):
+                                                if 'recording' in track:
+                                                    track_title = track['recording'].get('title', f'Track {idx+1:02d}')
+                                                    # Will store this for later use
+                except ImportError:
+                    print("musicbrainzngs not installed - metadata lookup disabled")
+                except Exception as e:
+                    print(f"MusicBrainz lookup failed: {e}")
+                
+                # Try CDDB lookup as fallback using CDDB.py or direct HTTP
+                if disc_info['artist'] == 'Unknown Artist':
+                    try:
+                        import CDDB
+                        import DiscID
+                        
+                        disc = DiscID.disc_id(DiscID.open(cd_device))
+                        query_info = CDDB.query(disc)
+                        
+                        if query_info:
+                            (status, info) = CDDB.read(query_info[1]['category'], query_info[1]['disc_id'])
+                            if status == 210 or status == 211:
+                                disc_info['artist'] = info.get('DTITLE', '').split('/')[0].strip()
+                                disc_info['album'] = info.get('DTITLE', '').split('/')[-1].strip()
+                                disc_info['year'] = info.get('DYEAR', '')
+                                
+                                # Extract track titles
+                                for key, value in info.items():
+                                    if key.startswith('TTITLE'):
+                                        track_num = int(key.replace('TTITLE', '')) + 1
+                                        # Store for later
+                    except ImportError:
+                        print("CDDB module not installed")
+                    except Exception as e:
+                        print(f"CDDB lookup failed: {e}")
+                
+                # Get track list with cdparanoia
+                try:
+                    result = subprocess.run(
+                        ['cdparanoia', '-d', cd_device, '-Q'],
+                        capture_output=True,
+                        text=True,
+                        timeout=5
+                    )
+                    
+                    if result.returncode == 0 or result.stderr:
+                        # Parse cdparanoia output
+                        output = result.stderr
+                        track_titles = {}
+                        
+                        # Try to get track info from CD-TEXT if available
+                        for line in output.split('\n'):
+                            if 'TITLE' in line:
+                                # CD-TEXT format parsing
+                                parts = line.split('TITLE')
+                                if len(parts) > 1:
+                                    title = parts[1].strip().strip('"\'')
+                                    if 'Track' in line:
+                                        track_num = int(line.split('Track')[1].split()[0])
+                                        track_titles[track_num] = title
+                        
+                        for line in output.split('\n'):
+                            line = line.strip()
+                            if line and line[0].isdigit() and '.' in line:
+                                parts = line.split()
+                                if len(parts) >= 4:
+                                    try:
+                                        track_num = int(parts[0].rstrip('.'))
+                                        duration_str = parts[3].strip('[]')
+                                        if ':' in duration_str:
+                                            duration = duration_str.split('.')[0]
+                                            
+                                            # Use CD-TEXT title if available, otherwise generic
+                                            track_title = track_titles.get(track_num, f'Track {track_num:02d}')
+                                            
+                                            track_info.append({
+                                                'number': track_num,
+                                                'title': track_title,
+                                                'duration': duration,
+                                                'device': cd_device,
+                                                'artist': disc_info['artist'],
+                                                'album': disc_info['album'],
+                                                'year': disc_info['year']
+                                            })
+                                            tracks_found = True
+                                    except:
+                                        continue
+                except Exception as e:
+                    print(f"cdparanoia query failed: {e}")
+                
+                # Fallback to cd-info
+                if not tracks_found:
+                    try:
+                        result = subprocess.run(
+                            ['cd-info', '--no-header', cd_device],
+                            capture_output=True,
+                            text=True,
+                            timeout=5
+                        )
+                        if result.returncode == 0:
+                            for line in result.stdout.split('\n'):
+                                if 'audio tracks' in line.lower() or 'track' in line.lower():
+                                    import re
+                                    match = re.search(r'(\d+)', line)
+                                    if match:
+                                        num_tracks = int(match.group(1))
+                                        for i in range(1, num_tracks + 1):
+                                            track_info.append({
+                                                'number': i,
+                                                'title': f'Track {i:02d}',
+                                                'duration': '3:30',
+                                                'device': cd_device,
+                                                'artist': disc_info['artist'],
+                                                'album': disc_info['album'],
+                                                'year': disc_info['year']
+                                            })
+                                        tracks_found = True
+                                        break
+                    except:
+                        pass
+                
+            elif platform.system() == "Windows":
+                # Windows CD detection code
+                try:
+                    drive_path = f"{drive}\\"
+                    if os.path.exists(drive_path):
+                        try:
+                            files = os.listdir(drive_path)
+                            cda_files = [f for f in files if f.lower().endswith('.cda')]
+                            if cda_files:
+                                tracks_found = True
+                                cd_device = drive
+                                for i, cda_file in enumerate(sorted(cda_files), 1):
+                                    minutes = 3 + (i % 4)
+                                    seconds = (i * 17) % 60
+                                    track_info.append({
+                                        'number': i,
+                                        'title': f'Track {i:02d}',
+                                        'duration': f'{minutes}:{seconds:02d}',
+                                        'device': drive,
+                                        'artist': 'Unknown Artist',
+                                        'album': 'Unknown Album',
+                                        'year': ''
+                                    })
+                        except:
+                            pass
+                except:
+                    pass
+            
+            # If still no tracks found, generate sample data
+            if not tracks_found:
+                sample_tracks = 12
+                cd_device = cd_device or (f"/dev/sr0" if platform.system() == "Linux" else "D:")
+                for i in range(1, sample_tracks + 1):
+                    minutes = 3 + (i % 4)
+                    seconds = (i * 17) % 60
+                    track_info.append({
+                        'number': i,
+                        'title': f'Track {i:02d}',
+                        'duration': f'{minutes}:{seconds:02d}',
+                        'device': cd_device,
+                        'artist': 'Unknown Artist',
+                        'album': 'Unknown Album',
+                        'year': ''
+                    })
+                tracks_found = True
+                
+        except Exception as e:
+            print(f"Error reading CD: {e}")
+        
+        # Clear loading message
+        loading_label.destroy()
+        
+        if tracks_found:
+            # Display disc info
+            info_frame = tk.Frame(track_frame, bg="#f0f0f0", relief=tk.RAISED, bd=2)
+            info_frame.pack(fill=tk.X, pady=10, padx=5)
+            
+            tk.Label(info_frame, text=f"Album: {disc_info['album']}", font=("Arial", 10, "bold"), bg="#f0f0f0").pack(anchor=tk.W, padx=10, pady=2)
+            tk.Label(info_frame, text=f"Artist: {disc_info['artist']}", font=("Arial", 9), bg="#f0f0f0").pack(anchor=tk.W, padx=10, pady=2)
+            if disc_info['year']:
+                tk.Label(info_frame, text=f"Year: {disc_info['year']}", font=("Arial", 9), bg="#f0f0f0").pack(anchor=tk.W, padx=10, pady=2)
+            tk.Label(info_frame, text=f"{len(track_info)} tracks", font=("Arial", 9), fg="green", bg="#f0f0f0").pack(anchor=tk.W, padx=10, pady=2)
+            
+            # Select/Deselect all
+            select_frame = tk.Frame(track_frame)
+            select_frame.pack(fill=tk.X, pady=5)
+            
+            all_vars = []
+            
+            def select_all():
+                for var in all_vars:
+                    var.set(True)
+            
+            def deselect_all():
+                for var in all_vars:
+                    var.set(False)
+            
+            tk.Button(select_frame, text="Select All", command=select_all).pack(side=tk.LEFT, padx=5)
+            tk.Button(select_frame, text="Deselect All", command=deselect_all).pack(side=tk.LEFT, padx=5)
+            
+            # Track list
+            for track in track_info:
+                track_item_frame = tk.Frame(track_frame)
+                track_item_frame.pack(fill=tk.X, pady=2, padx=5)
+                
+                var = tk.BooleanVar(value=True)
+                all_vars.append(var)
+                
+                cb = tk.Checkbutton(track_item_frame, text=f"{track['number']:02d}. {track['title']}", 
+                                   variable=var, width=35, anchor='w')
+                cb.pack(side=tk.LEFT)
+                
+                tk.Label(track_item_frame, text=f"{track['duration']}", width=8).pack(side=tk.LEFT, padx=10)
+            
+            # Store track vars for ripping
+            track_frame.track_vars = all_vars
+            track_frame.track_info = track_info
+            track_frame.cd_device = cd_device
+            track_frame.disc_info = disc_info
         else:
             tk.Label(track_frame, text="No audio CD detected in drive", 
                     fg="red", font=("Arial", 10)).pack(pady=20)
@@ -782,9 +1606,18 @@ Sessions: 0"""
                     progress_win.update()
                     
                     # Determine output filename
-                    safe_title = track_info['title'].replace(' ', '_')
+                    safe_title = track_info['title'].replace(' ', '_').replace('/', '-')
+                    artist = track_info.get('artist', 'Unknown Artist').replace('/', '-')
+                    album = track_info.get('album', 'Unknown Album').replace('/', '-')
+                    
                     output_ext = output_format.lower()
-                    output_file = os.path.join(output_folder, f"{safe_title}.{output_ext}")
+                    
+                    # Create artist/album folder structure
+                    artist_folder = os.path.join(output_folder, artist)
+                    album_folder = os.path.join(artist_folder, album)
+                    os.makedirs(album_folder, exist_ok=True)
+                    
+                    output_file = os.path.join(album_folder, f"{track_num:02d} - {safe_title}.{output_ext}")
                     
                     success = False
                     
@@ -792,7 +1625,7 @@ Sessions: 0"""
                         # Linux: Use cdparanoia + ffmpeg pipeline
                         
                         # Method 1: cdparanoia to extract WAV, then convert with ffmpeg
-                        temp_wav = os.path.join(output_folder, f"temp_track_{track_num}.wav")
+                        temp_wav = os.path.join(album_folder, f"temp_track_{track_num}.wav")
                         
                         try:
                             # Check if cdparanoia is available
@@ -809,20 +1642,33 @@ Sessions: 0"""
                                 if result.returncode == 0 and os.path.exists(temp_wav):
                                     print(f"Successfully extracted to WAV: {temp_wav}")
                                     
-                                    # If output format is WAV, just rename
+                                    # If output format is WAV, apply metadata and rename
                                     if output_ext == 'wav':
+                                        # WAV files don't support tags directly, just rename
                                         shutil.move(temp_wav, output_file)
                                         success = True
                                     else:
-                                        # Convert WAV to desired format using ffmpeg
+                                        # Convert WAV to desired format using ffmpeg with metadata
                                         if shutil.which('ffmpeg'):
-                                            print(f"Converting to {output_ext}...")
+                                            print(f"Converting to {output_ext} with metadata...")
                                             
-                                            # Build ffmpeg command based on format
+                                            # Build ffmpeg command with metadata tags
                                             ffmpeg_cmd = ['ffmpeg', '-i', temp_wav, '-y']
                                             
+                                            # Add metadata
+                                            metadata = []
+                                            metadata.extend(['-metadata', f'title={track_info["title"]}'])
+                                            metadata.extend(['-metadata', f'artist={track_info.get("artist", "Unknown Artist")}'])
+                                            metadata.extend(['-metadata', f'album={track_info.get("album", "Unknown Album")}'])
+                                            metadata.extend(['-metadata', f'track={track_num}/{len(selected_tracks)}'])
+                                            if track_info.get('year'):
+                                                metadata.extend(['-metadata', f'date={track_info["year"]}'])
+                                            
+                                            ffmpeg_cmd.extend(metadata)
+                                            
+                                            # Add codec settings
                                             if output_ext == 'mp3':
-                                                ffmpeg_cmd.extend(['-codec:a', 'libmp3lame', '-b:a', '320k'])
+                                                ffmpeg_cmd.extend(['-codec:a', 'libmp3lame', '-b:a', '320k', '-id3v2_version', '3'])
                                             elif output_ext == 'flac':
                                                 ffmpeg_cmd.extend(['-codec:a', 'flac', '-compression_level', '8'])
                                             elif output_ext == 'aac':
@@ -832,6 +1678,8 @@ Sessions: 0"""
                                             
                                             ffmpeg_cmd.append(output_file)
                                             
+                                            print(f"Running: {' '.join(ffmpeg_cmd)}")
+                                            
                                             conv_result = subprocess.run(
                                                 ffmpeg_cmd,
                                                 capture_output=True,
@@ -840,7 +1688,7 @@ Sessions: 0"""
                                             )
                                             
                                             if conv_result.returncode == 0 and os.path.exists(output_file):
-                                                print(f"Successfully converted to {output_ext}")
+                                                print(f"Successfully converted to {output_ext} with metadata")
                                                 success = True
                                                 # Remove temp WAV
                                                 try:
@@ -956,40 +1804,258 @@ Sessions: 0"""
     def open_audio_converter_window(self):
         win = tk.Toplevel(self.root)
         win.title("Audio Converter")
-        win.geometry("600x620")
+        win.geometry("650x760")
         
         tk.Label(win, text="Audio Converter", font=("Arial", 16, "bold")).pack(pady=20)
         
-        input_frame = tk.LabelFrame(win, text="Input Files", padx=15, pady=15)
+        input_frame = tk.LabelFrame(win, text="Input Audio Files", padx=15, pady=15)
         input_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
         
-        listbox = tk.Listbox(input_frame, height=8)
-        listbox.pack(fill=tk.BOTH, expand=True, pady=5)
+        # Create listbox with scrollbar
+        list_inner_frame = tk.Frame(input_frame)
+        list_inner_frame.pack(fill=tk.BOTH, expand=True, pady=5)
+        
+        scrollbar = tk.Scrollbar(list_inner_frame)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        listbox = tk.Listbox(list_inner_frame, height=10, yscrollcommand=scrollbar.set)
+        listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.config(command=listbox.yview)
+        
+        def add_files():
+            """Open file browser for audio files"""
+            files = filedialog.askopenfilenames(
+                title="Select Audio Files",
+                filetypes=[
+                    ("All Audio Files", "*.mp3 *.wav *.flac *.aac *.ogg *.m4a *.wma *.ape *.opus"),
+                    ("MP3 Files", "*.mp3"),
+                    ("WAV Files", "*.wav"),
+                    ("FLAC Files", "*.flac"),
+                    ("AAC Files", "*.aac"),
+                    ("OGG Files", "*.ogg"),
+                    ("M4A Files", "*.m4a"),
+                    ("WMA Files", "*.wma"),
+                    ("APE Files", "*.ape"),
+                    ("OPUS Files", "*.opus"),
+                    ("All Files", "*.*")
+                ]
+            )
+            if files:
+                for file in files:
+                    listbox.insert(tk.END, file)
+        
+        def remove_file():
+            """Remove selected file from list"""
+            selection = listbox.curselection()
+            if selection:
+                listbox.delete(selection[0])
+        
+        def clear_all():
+            """Clear all files from list"""
+            listbox.delete(0, tk.END)
         
         btn_frame = tk.Frame(input_frame)
         btn_frame.pack(fill=tk.X, pady=5)
-        tk.Button(btn_frame, text="Add Files...", command=lambda: messagebox.showinfo("Add", "Select audio files")).pack(side=tk.LEFT, padx=5)
-        tk.Button(btn_frame, text="Remove", command=lambda: listbox.delete(tk.ACTIVE) if listbox.curselection() else None).pack(side=tk.LEFT, padx=5)
-        tk.Button(btn_frame, text="Clear All", command=lambda: listbox.delete(0, tk.END)).pack(side=tk.LEFT, padx=5)
+        tk.Button(btn_frame, text="Add Files...", command=add_files).pack(side=tk.LEFT, padx=5)
+        tk.Button(btn_frame, text="Remove", command=remove_file).pack(side=tk.LEFT, padx=5)
+        tk.Button(btn_frame, text="Clear All", command=clear_all).pack(side=tk.LEFT, padx=5)
         
+        # Output settings
         format_frame = tk.LabelFrame(win, text="Output Settings", padx=15, pady=15)
         format_frame.pack(fill=tk.X, padx=20, pady=10)
         
         tk.Label(format_frame, text="Output Format:").pack(anchor=tk.W)
         format_var = tk.StringVar(value="MP3")
-        ttk.Combobox(format_frame, textvariable=format_var, values=["MP3", "WAV", "FLAC", "AAC", "OGG", "M4A"], width=15).pack(anchor=tk.W, pady=5)
+        format_combo = ttk.Combobox(format_frame, textvariable=format_var, 
+                                    values=["MP3", "WAV", "FLAC", "AAC", "OGG", "M4A", "WMA", "OPUS"], 
+                                    width=15, state='readonly')
+        format_combo.pack(anchor=tk.W, pady=5)
         
-        tk.Label(format_frame, text="Quality:").pack(anchor=tk.W, pady=(10,0))
+        tk.Label(format_frame, text="Quality/Bitrate:").pack(anchor=tk.W, pady=(10,0))
         quality_var = tk.StringVar(value="320 kbps")
-        ttk.Combobox(format_frame, textvariable=quality_var, values=["128 kbps", "192 kbps", "256 kbps", "320 kbps"], width=15).pack(anchor=tk.W, pady=5)
+        quality_combo = ttk.Combobox(format_frame, textvariable=quality_var, 
+                                     values=["128 kbps", "192 kbps", "256 kbps", "320 kbps", "Lossless"], 
+                                     width=15, state='readonly')
+        quality_combo.pack(anchor=tk.W, pady=5)
         
-        tk.Button(win, text="Convert", bg="#0078d4", fg="white", padx=20, pady=10,
-                 command=lambda: messagebox.showinfo("Convert", "Converting audio files...")).pack(pady=15)
+        tk.Label(format_frame, text="Output Folder:").pack(anchor=tk.W, pady=(10,0))
+        output_frame = tk.Frame(format_frame)
+        output_frame.pack(fill=tk.X, pady=5)
+        output_entry = tk.Entry(output_frame, width=40)
+        output_entry.pack(side=tk.LEFT, padx=5)
+        tk.Button(output_frame, text="Browse...", 
+                 command=lambda: self._browse_folder_for_entry(output_entry, "Select Output Folder")).pack(side=tk.LEFT)
+        
+        # Convert button
+        def start_conversion():
+            """Start audio file conversion"""
+            files = list(listbox.get(0, tk.END))
+            output_folder = output_entry.get()
+            
+            if not files:
+                messagebox.showerror("Error", "Please add audio files to convert")
+                return
+            
+            if not output_folder:
+                messagebox.showerror("Error", "Please select an output folder")
+                return
+            
+            # Create output folder if it doesn't exist
+            os.makedirs(output_folder, exist_ok=True)
+            
+            output_format = format_var.get()
+            quality = quality_var.get()
+            
+            # Create progress window
+            progress_win = tk.Toplevel(win)
+            progress_win.title("Converting Audio Files")
+            progress_win.geometry("500x300")
+            progress_win.transient(win)
+            progress_win.grab_set()
+            
+            tk.Label(progress_win, text="Converting Audio Files", font=("Arial", 14, "bold")).pack(pady=20)
+            
+            status_label = tk.Label(progress_win, text="Initializing...", font=("Arial", 10))
+            status_label.pack(pady=10)
+            
+            progress_var = tk.IntVar()
+            progress_bar = ttk.Progressbar(progress_win, variable=progress_var, maximum=100, length=400)
+            progress_bar.pack(pady=20)
+            
+            file_label = tk.Label(progress_win, text="", font=("Arial", 9))
+            file_label.pack(pady=5)
+            
+            cancel_flag = {'cancelled': False}
+            
+            def cancel_conversion():
+                cancel_flag['cancelled'] = True
+                progress_win.destroy()
+            
+            cancel_btn = tk.Button(progress_win, text="Cancel", command=cancel_conversion, padx=20, pady=5)
+            cancel_btn.pack(pady=10)
+            
+            def convert_thread():
+                try:
+                    import subprocess
+                    import shutil
+                    from pathlib import Path
+                    
+                    total_files = len(files)
+                    successful = 0
+                    failed = []
+                    
+                    for idx, input_file in enumerate(files, 1):
+                        if cancel_flag['cancelled']:
+                            break
+                        
+                        if not os.path.exists(input_file):
+                            failed.append(os.path.basename(input_file))
+                            continue
+                        
+                        # Update status
+                        status_label.config(text=f"Converting file {idx} of {total_files}")
+                        file_label.config(text=os.path.basename(input_file))
+                        progress_win.update()
+                        
+                        # Get output filename
+                        input_filename = Path(input_file).stem
+                        output_ext = output_format.lower()
+                        output_file = os.path.join(output_folder, f"{input_filename}.{output_ext}")
+                        
+                        try:
+                            # Check if ffmpeg is available
+                            if not shutil.which('ffmpeg'):
+                                failed.append(os.path.basename(input_file) + " (ffmpeg not found)")
+                                continue
+                            
+                            # Build ffmpeg command
+                            ffmpeg_cmd = ['ffmpeg', '-i', input_file, '-y']
+                            
+                            # Set codec based on format and quality
+                            if output_ext == 'mp3':
+                                bitrate = quality.split()[0] if quality != 'Lossless' else '320'
+                                ffmpeg_cmd.extend(['-codec:a', 'libmp3lame', '-b:a', f'{bitrate}k'])
+                            elif output_ext == 'flac':
+                                ffmpeg_cmd.extend(['-codec:a', 'flac', '-compression_level', '8'])
+                            elif output_ext == 'wav':
+                                ffmpeg_cmd.extend(['-codec:a', 'pcm_s16le'])
+                            elif output_ext == 'aac':
+                                bitrate = quality.split()[0] if quality != 'Lossless' else '256'
+                                ffmpeg_cmd.extend(['-codec:a', 'aac', '-b:a', f'{bitrate}k'])
+                            elif output_ext == 'ogg':
+                                ffmpeg_cmd.extend(['-codec:a', 'libvorbis', '-q:a', '6'])
+                            elif output_ext == 'm4a':
+                                bitrate = quality.split()[0] if quality != 'Lossless' else '256'
+                                ffmpeg_cmd.extend(['-codec:a', 'aac', '-b:a', f'{bitrate}k'])
+                            elif output_ext == 'wma':
+                                bitrate = quality.split()[0] if quality != 'Lossless' else '256'
+                                ffmpeg_cmd.extend(['-codec:a', 'wmav2', '-b:a', f'{bitrate}k'])
+                            elif output_ext == 'opus':
+                                ffmpeg_cmd.extend(['-codec:a', 'libopus', '-b:a', '192k'])
+                            elif output_ext == 'ape':
+                                ffmpeg_cmd.extend(['-codec:a', 'ape', '-compression_level', '2000'])
+                            
+                            ffmpeg_cmd.append(output_file)
+                            
+                            print(f"Converting: {' '.join(ffmpeg_cmd)}")
+                            
+                            # Run conversion
+                            result = subprocess.run(
+                                ffmpeg_cmd,
+                                capture_output=True,
+                                text=True,
+                                timeout=300
+                            )
+                            
+                            if result.returncode == 0 and os.path.exists(output_file):
+                                successful += 1
+                                print(f"Successfully converted: {output_file}")
+                            else:
+                                failed.append(os.path.basename(input_file))
+                                print(f"Conversion failed: {result.stderr}")
+                        
+                        except subprocess.TimeoutExpired:
+                            failed.append(os.path.basename(input_file) + " (timeout)")
+                        except Exception as e:
+                            failed.append(os.path.basename(input_file))
+                            print(f"Conversion error: {e}")
+                        
+                        # Update progress
+                        progress = int((idx / total_files) * 100)
+                        progress_var.set(progress)
+                    
+                    # Complete
+                    if not cancel_flag['cancelled']:
+                        progress_var.set(100)
+                        status_label.config(text=f"Completed! Converted {successful}/{total_files} files")
+                        file_label.config(text=f"Output folder: {output_folder}")
+                        cancel_btn.config(text="Close")
+                        
+                        # Auto-close after 3 seconds
+                        progress_win.after(3000, progress_win.destroy)
+                        
+                        # Show completion message
+                        msg = f"Successfully converted {successful}/{total_files} file(s)\n\nOutput folder: {output_folder}\nFormat: {output_format}"
+                        if failed:
+                            msg += f"\n\nFailed: {', '.join(failed)}"
+                        self.root.after(0, lambda: messagebox.showinfo("Success", msg))
+                
+                except Exception as e:
+                    if not cancel_flag['cancelled']:
+                        self.root.after(0, lambda: messagebox.showerror("Error", f"Conversion failed: {str(e)}"))
+                        progress_win.destroy()
+            
+            # Start conversion in background thread
+            thread = threading.Thread(target=convert_thread, daemon=True)
+            thread.start()
+        
+        tk.Button(win, text="Start Conversion", bg="#0078d4", fg="white", padx=20, pady=10,
+                 command=start_conversion).pack(pady=15)
     
     def open_usb_image_window(self):
         win = tk.Toplevel(self.root)
         win.title("Make USB Drive Image")
-        win.geometry("600x500")
+        win.geometry("600x400")
         
         tk.Label(win, text="Make USB Drive Image", font=("Arial", 16, "bold")).pack(pady=20)
         
