@@ -1,0 +1,183 @@
+<svg viewBox="0 0 1200 300" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <defs>
+    <style>
+      @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+      @keyframes spin-reverse {
+        from { transform: rotate(360deg); }
+        to { transform: rotate(0deg); }
+      }
+      @keyframes pulse {
+        0%, 100% { opacity: 0.3; }
+        50% { opacity: 1; }
+      }
+      @keyframes float {
+        0%, 100% { transform: translateY(0px); }
+        50% { transform: translateY(-8px); }
+      }
+      @keyframes slideIn {
+        0% { opacity: 0; transform: translateX(20px); }
+        100% { opacity: 1; transform: translateX(0px); }
+      }
+      @keyframes glow {
+        0%, 100% { filter: drop-shadow(0 0 2px rgba(0, 120, 212, 0.4)); }
+        50% { filter: drop-shadow(0 0 8px rgba(0, 120, 212, 0.8)); }
+      }
+      
+      .disc { animation: spin 6s linear infinite; transform-origin: 100px 150px; }
+      .disc-secondary { animation: spin-reverse 8s linear infinite; transform-origin: 100px 150px; }
+      .data-stream { animation: pulse 2s ease-in-out infinite; }
+      .convert-arrow { animation: float 2s ease-in-out infinite; }
+      .title { animation: slideIn 0.8s ease-out; }
+      .subtitle { animation: slideIn 0.8s ease-out 0.1s both; }
+      .accent-glow { animation: glow 2s ease-in-out infinite; }
+      
+      text { font-family: 'Arial', 'Helvetica', sans-serif; }
+      .title-text { font-size: 56px; font-weight: bold; fill: #ffffff; letter-spacing: -1px; }
+      .subtitle-text { font-size: 18px; fill: #c0d4e0; letter-spacing: 0.5px; }
+      .feature-text { font-size: 13px; fill: #a0c8e8; }
+    </style>
+    
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a2a3a;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0d1b2a;stop-opacity:1" />
+    </linearGradient>
+    
+    <linearGradient id="discGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2a4a6a;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#0078d4;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1a3a5a;stop-opacity:1" />
+    </linearGradient>
+    
+    <linearGradient id="accentGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00d4ff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0078d4;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="1200" height="300" fill="url(#bgGradient)"/>
+  
+  <!-- Decorative Grid Pattern -->
+  <defs>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#0078d4" stroke-width="0.5" opacity="0.1"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="300" fill="url(#grid)"/>
+  
+  <!-- Left Disc Stack (Source) -->
+  <g class="disc">
+    <!-- Outer disc ring -->
+    <circle cx="100" cy="150" r="85" fill="none" stroke="url(#discGradient)" stroke-width="3"/>
+    <circle cx="100" cy="150" r="75" fill="none" stroke="#0078d4" stroke-width="1" opacity="0.6"/>
+    
+    <!-- Disc center -->
+    <circle cx="100" cy="150" r="65" fill="url(#discGradient)" opacity="0.9"/>
+    <circle cx="100" cy="150" r="55" fill="#1a3a5a"/>
+    <circle cx="100" cy="150" r="15" fill="#0078d4"/>
+    
+    <!-- Disc tracks -->
+    <circle cx="100" cy="150" r="50" fill="none" stroke="#0078d4" stroke-width="0.8" opacity="0.4"/>
+    <circle cx="100" cy="150" r="40" fill="none" stroke="#0078d4" stroke-width="0.8" opacity="0.4"/>
+    <circle cx="100" cy="150" r="30" fill="none" stroke="#0078d4" stroke-width="0.8" opacity="0.4"/>
+  </g>
+  
+  <!-- Spinning Data Stream Around Left Disc -->
+  <g class="data-stream">
+    <circle cx="100" cy="150" r="95" fill="none" stroke="url(#accentGradient)" stroke-width="2" opacity="0.6" stroke-dasharray="10,15"/>
+  </g>
+  
+  <!-- Right Disc Stack (Output) -->
+  <g class="disc-secondary">
+    <!-- Outer disc ring -->
+    <circle cx="500" cy="150" r="85" fill="none" stroke="url(#discGradient)" stroke-width="3"/>
+    <circle cx="500" cy="150" r="75" fill="none" stroke="#0078d4" stroke-width="1" opacity="0.6"/>
+    
+    <!-- Disc center -->
+    <circle cx="500" cy="150" r="65" fill="url(#discGradient)" opacity="0.9"/>
+    <circle cx="500" cy="150" r="55" fill="#1a3a5a"/>
+    <circle cx="500" cy="150" r="15" fill="#0078d4"/>
+    
+    <!-- Disc tracks -->
+    <circle cx="500" cy="150" r="50" fill="none" stroke="#0078d4" stroke-width="0.8" opacity="0.4"/>
+    <circle cx="500" cy="150" r="40" fill="none" stroke="#0078d4" stroke-width="0.8" opacity="0.4"/>
+    <circle cx="500" cy="150" r="30" fill="none" stroke="#0078d4" stroke-width="0.8" opacity="0.4"/>
+  </g>
+  
+  <!-- Spinning Data Stream Around Right Disc -->
+  <g class="data-stream" style="animation-delay: 1s;">
+    <circle cx="500" cy="150" r="95" fill="none" stroke="url(#accentGradient)" stroke-width="2" opacity="0.6" stroke-dasharray="10,15"/>
+  </g>
+  
+  <!-- Conversion Arrows in Middle -->
+  <g class="convert-arrow">
+    <!-- Right arrow -->
+    <defs>
+      <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+        <polygon points="0 0, 10 3, 0 6" fill="#00d4ff"/>
+      </marker>
+    </defs>
+    <line x1="195" y1="130" x2="405" y2="130" stroke="#00d4ff" stroke-width="3" marker-end="url(#arrowhead)"/>
+    <line x1="195" y1="170" x2="405" y2="170" stroke="#00d4ff" stroke-width="3" marker-end="url(#arrowhead)"/>
+    
+    <!-- Animated dots between arrows -->
+    <circle cx="220" cy="150" r="2.5" fill="#00d4ff" opacity="0.8">
+      <animate attributeName="opacity" values="0.3;1;0.3" dur="1.5s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="270" cy="150" r="2.5" fill="#00d4ff" opacity="0.8">
+      <animate attributeName="opacity" values="0.3;1;0.3" dur="1.5s" repeatCount="indefinite" begin="0.3s"/>
+    </circle>
+    <circle cx="320" cy="150" r="2.5" fill="#00d4ff" opacity="0.8">
+      <animate attributeName="opacity" values="0.3;1;0.3" dur="1.5s" repeatCount="indefinite" begin="0.6s"/>
+    </circle>
+    <circle cx="370" cy="150" r="2.5" fill="#00d4ff" opacity="0.8">
+      <animate attributeName="opacity" values="0.3;1;0.3" dur="1.5s" repeatCount="indefinite" begin="0.9s"/>
+    </circle>
+  </g>
+  
+  <!-- Title Section -->
+  <g class="title">
+    <text x="620" y="95" class="title-text">X-ISO</text>
+    <rect x="615" y="100" width="150" height="2" fill="url(#accentGradient)" class="accent-glow"/>
+  </g>
+  
+  <!-- Subtitle -->
+  <g class="subtitle">
+    <text x="620" y="130" class="subtitle-text">Disc Image Converter &amp; Burner</text>
+  </g>
+  
+  <!-- Feature Pills -->
+  <g class="subtitle" style="animation-delay: 0.2s;">
+    <rect x="620" y="160" width="130" height="22" rx="11" fill="#0078d4" opacity="0.3" stroke="#00d4ff" stroke-width="1"/>
+    <text x="685" y="177" class="feature-text" text-anchor="middle">🔄 Convert</text>
+    
+    <rect x="770" y="160" width="130" height="22" rx="11" fill="#0078d4" opacity="0.3" stroke="#00d4ff" stroke-width="1"/>
+    <text x="835" y="177" class="feature-text" text-anchor="middle">💿 Burn</text>
+    
+    <rect x="620" y="195" width="130" height="22" rx="11" fill="#0078d4" opacity="0.3" stroke="#00d4ff" stroke-width="1"/>
+    <text x="685" y="212" class="feature-text" text-anchor="middle">🎵 Rip Audio</text>
+    
+    <rect x="770" y="195" width="130" height="22" rx="11" fill="#0078d4" opacity="0.3" stroke="#00d4ff" stroke-width="1"/>
+    <text x="835" y="212" class="feature-text" text-anchor="middle">🔧 Tools</text>
+  </g>
+  
+  <!-- Corner Accents -->
+  <g opacity="0.4" class="accent-glow">
+    <circle cx="30" cy="30" r="3" fill="#00d4ff"/>
+    <circle cx="1170" cy="30" r="3" fill="#00d4ff"/>
+    <circle cx="30" cy="270" r="3" fill="#00d4ff"/>
+    <circle cx="1170" cy="270" r="3" fill="#00d4ff"/>
+  </g>
+  
+  <!-- Scan lines effect (subtle) -->
+  <g opacity="0.05">
+    <line x1="0" y1="0" x2="1200" y2="0" stroke="#00d4ff" stroke-width="1"/>
+    <line x1="0" y1="10" x2="1200" y2="10" stroke="#00d4ff" stroke-width="1"/>
+    <line x1="0" y1="20" x2="1200" y2="20" stroke="#00d4ff" stroke-width="1"/>
+    <line x1="0" y1="30" x2="1200" y2="30" stroke="#00d4ff" stroke-width="1"/>
+    <line x1="0" y1="40" x2="1200" y2="40" stroke="#00d4ff" stroke-width="1"/>
+  </g>
+</svg>
