@@ -296,7 +296,7 @@ For issues and feature requests, please visit the project repository or contact 
 
 ---
 
-**Version**: 1.0  
-**Last Updated**: 2025  
+**Version**: 1.8  
+**Last Updated**: June 5, 2026  
 **Platform**: Cross-Platform (Linux, Windows)  
 **Python Version**: 3.6+
