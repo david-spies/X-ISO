@@ -1,4 +1,14 @@
 ![X-ISO](docs/x-iso-banner.svg)
+![Python](https://img.shields.io/badge/python-3.6%2B-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Platform](https://img.shields.io/badge/platform-Linux-orange)
+![Windows](https://img.shields.io/badge/Windows-partial%20support-yellow)
+![GUI](https://img.shields.io/badge/GUI-Tkinter-blue)
+![Status](https://img.shields.io/badge/status-active%20development-brightgreen)
+![ffmpeg](https://img.shields.io/badge/powered%20by-ffmpeg-red)
+![cdparanoia](https://img.shields.io/badge/ripping-cdparanoia-lightgrey)
+![MusicBrainz](https://img.shields.io/badge/metadata-MusicBrainz-black)
+![Version](https://img.shields.io/badge/version-1.0-blue)
 # X-ISO - Disc Image Converter & Burner
 
 A comprehensive cross-platform disc image conversion and audio CD ripping utility with metadata support.
